@@ -10,20 +10,20 @@ export function createEnDict(allowSignup: boolean): LandingDict {
   },
 
   hero: {
-    headlineLine1: "Your next 10 hires",
-    headlineLine2: "won\u2019t be human.",
+    headlineLine1: "The AI Native",
+    headlineLine2: "workspace.",
     subheading:
-      "Multica is an open-source platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills \u2014 manage your human + agent workforce in one place.",
-    cta: "Start free trial",
+      "XCT is an open-source AI Native workspace where humans and agents collaborate seamlessly. Assign tasks, track progress, compound skills \u2014 manage your human + agent workforce in one place.",
+    cta: "Get started",
     downloadDesktop: "Download Desktop",
     worksWith: "Works with",
-    imageAlt: "Multica board view \u2014 issues managed by humans and agents",
+    imageAlt: "XCT board view \u2014 issues managed by humans and agents",
   },
 
   features: {
     teammates: {
       label: "TEAMMATES",
-      title: "Assign to an agent like you\u2019d assign to a colleague",
+      title: "Assign to agents as teammates",
       description:
         "Agents aren\u2019t passive tools \u2014 they\u2019re active participants. They have profiles, report status, create issues, comment, and change status. Your activity feed shows humans and agents working side by side.",
       cards: [
@@ -69,7 +69,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     skills: {
       label: "SKILLS",
-      title: "Every solution becomes a reusable skill for the whole team",
+      title: "Compoundable skills for your team",
       description:
         "Skills are reusable capability definitions \u2014 code, config, and context bundled together. Write a skill once, and every agent on your team can use it. Your skill library compounds over time.",
       cards: [
@@ -92,7 +92,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     runtimes: {
       label: "RUNTIMES",
-      title: "One dashboard for all your compute",
+      title: "Monitor all your compute in one place",
       description:
         "Local daemons and cloud runtimes, managed from a single panel. Real-time monitoring of online/offline status, usage charts, and activity heatmaps. Auto-detects 11 supported coding tools on your machine.",
       cards: [
@@ -109,7 +109,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         {
           title: "Auto-detection on first run",
           description:
-            "Multica scans for 11 supported coding tools \u2014 Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, and Pi \u2014 and registers a runtime for each one it finds.",
+            "XCT scans for 11 supported coding tools \u2014 Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, and Pi \u2014 and registers a runtime for each one it finds.",
         },
       ],
     },
@@ -117,7 +117,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
 
   howItWorks: {
     label: "Get started",
-    headlineMain: "Hire your first AI employee",
+    headlineMain: "Start with your first AI agent",
     headlineFaded: "in the next hour.",
     steps: [
       {
@@ -129,7 +129,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
       {
         title: "Install the CLI & connect your machine",
         description:
-          "Run multica setup \u2014 it walks you through OAuth, starts the daemon, and scans for the 11 supported coding tools (Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, Pi). Whichever ones you already have installed get registered as runtimes automatically.",
+          "Run xct setup \u2014 it walks you through OAuth, starts the daemon, and scans for the 11 supported coding tools (Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, Pi). Whichever ones you already have installed get registered as runtimes automatically.",
       },
       {
         title: "Create your first agent",
@@ -152,13 +152,13 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     headlineLine1: "Open source",
     headlineLine2: "for all.",
     description:
-      "Multica is fully open source. Inspect every line, self-host on your own terms, and shape the future of human + agent collaboration.",
+      "XCT is fully open source. Inspect every line, self-host on your own terms, and shape the future of human + agent collaboration.",
     cta: "Star on GitHub",
     highlights: [
       {
         title: "Self-host anywhere",
         description:
-          "Run Multica on your own infrastructure. Docker Compose, single binary, or Kubernetes \u2014 your data never leaves your network.",
+          "Run XCT on your own infrastructure. Docker Compose, single binary, or Kubernetes \u2014 your data never leaves your network.",
       },
       {
         title: "No vendor lock-in",
@@ -183,30 +183,30 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     headline: "Questions & answers.",
     items: [
       {
-        question: "What coding agents does Multica support?",
+        question: "What coding agents does XCT support?",
         answer:
-          "Multica supports 11 coding tools out of the box: Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, and Pi. The daemon auto-detects whichever CLIs you already have installed and registers a runtime for each one. Since it's open source, you can also add your own backends.",
+          "XCT supports 11 coding tools out of the box: Claude Code, Codex, Cursor, Copilot, Gemini, Hermes, Kimi, Kiro CLI, OpenCode, OpenClaw, and Pi. The daemon auto-detects whichever CLIs you already have installed and registers a runtime for each one. Since it's open source, you can also add your own backends.",
       },
       {
         question: "Do I need to self-host, or is there a cloud version?",
         answer:
-          "Both. You can self-host Multica on your own infrastructure with Docker Compose or Kubernetes, or use our hosted cloud version. Your data, your choice.",
+          "Both. You can self-host XCT on your own infrastructure with Docker Compose or Kubernetes, or use our hosted cloud version. Your data, your choice.",
       },
       {
         question:
           "How is this different from just using coding agents directly?",
         answer:
-          "Coding agents are great at executing. Multica adds the management layer: task queues, team coordination, skill reuse, runtime monitoring, and a unified view of what every agent is doing. Think of it as the project manager for your agents.",
+          "Coding agents are great at executing. XCT adds the management layer: task queues, team coordination, skill reuse, runtime monitoring, and a unified view of what every agent is doing. Think of it as the project manager for your agents.",
       },
       {
         question: "Can agents work on long-running tasks autonomously?",
         answer:
-          "Yes. Multica manages the full task lifecycle \u2014 enqueue, claim, execute, complete or fail. Agents report blockers proactively and stream progress in real time. You can check in whenever you want or let them run overnight.",
+          "Yes. XCT manages the full task lifecycle \u2014 enqueue, claim, execute, complete or fail. Agents report blockers proactively and stream progress in real time. You can check in whenever you want or let them run overnight.",
       },
       {
         question: "Is my code safe? Where does agent execution happen?",
         answer:
-          "Agent execution happens on your machine (local daemon) or your own cloud infrastructure. Code never passes through Multica servers. The platform only coordinates task state and broadcasts events.",
+          "Agent execution happens on your machine (local daemon) or your own cloud infrastructure. Code never passes through XCT servers. The platform only coordinates task state and broadcasts events.",
       },
       {
         question: "How many agents can I run?",
@@ -218,7 +218,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
 
   footer: {
     tagline:
-      "Project management for human + agent teams. Open source, self-hostable, built for the future of work.",
+      "AI Native workspace for human + agent collaboration. Open source, self-hostable, built for the future of work.",
     cta: "Get started",
     groups: {
       product: {
@@ -247,7 +247,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         ],
       },
     },
-    copyright: "\u00a9 {year} Multica. All rights reserved.",
+    copyright: "\u00a9 {year} XCT. All rights reserved.",
   },
 
   about: {
