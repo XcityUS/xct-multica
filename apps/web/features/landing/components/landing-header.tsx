@@ -45,6 +45,15 @@ export function LandingHeader({
 
         <div className="flex items-center gap-2.5 sm:gap-3">
           <Link
+            href="/#agent-marketplace"
+            className={cn(
+              headerButtonClassName("ghost", variant),
+              "hidden md:inline-flex",
+            )}
+          >
+            {t.header.marketplace}
+          </Link>
+          <Link
             href={user ? "/" : "/login"}
             className={headerButtonClassName("solid", variant)}
           >

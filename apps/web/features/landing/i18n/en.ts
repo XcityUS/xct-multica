@@ -8,6 +8,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     login: "Log in",
     dashboard: "Dashboard",
     changelog: "Changelog",
+    marketplace: "Agent Marketplace",
   },
 
   hero: {
@@ -114,6 +115,21 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         },
       ],
     },
+  },
+
+  marketplace: {
+    label: "Agent Marketplace",
+    headlineMain: "An army of agents,",
+    headlineFaded: "one click away.",
+    description:
+      "194 pre-tuned agents across 16 categories — from full-stack engineers and security reviewers to growth hackers, game designers, and academic researchers. Pick one, drop it into a workspace, and it starts working.",
+    stats: {
+      agents: "194 agents",
+      categories: "16 categories",
+      oneClick: "1-click deploy",
+    },
+    cta: "Open the marketplace",
+    ctaSecondary: "Browse the source",
   },
 
   howItWorks: {

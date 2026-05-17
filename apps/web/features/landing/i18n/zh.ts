@@ -8,6 +8,7 @@ export function createZhDict(allowSignup: boolean): LandingDict {
     login: "\u767b\u5f55",
     dashboard: "\u8fdb\u5165\u5de5\u4f5c\u53f0",
     changelog: "\u66f4\u65b0\u65e5\u5fd7",
+    marketplace: "\u4ee3\u7406\u5e02\u573a",
   },
 
   hero: {
@@ -114,6 +115,21 @@ export function createZhDict(allowSignup: boolean): LandingDict {
         },
       ],
     },
+  },
+
+  marketplace: {
+    label: "代理市场",
+    headlineMain: "194 个预调代理，",
+    headlineFaded: "一点即用。",
+    description:
+      "跨 16 个领域的预调代理——从全栈工程师、安全审核专家到增长黑客、游戏设计、学术研究者。选一个，放到工作区，立即开始干活。",
+    stats: {
+      agents: "194 个代理",
+      categories: "16 个分类",
+      oneClick: "一点部署",
+    },
+    cta: "进入代理市场",
+    ctaSecondary: "查看源码",
   },
 
   howItWorks: {

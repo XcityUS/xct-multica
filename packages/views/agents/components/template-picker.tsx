@@ -2,17 +2,27 @@
 
 import { useMemo } from "react";
 import {
+  BarChart3,
+  Box,
   Brain,
   Brush,
   ChevronRight,
+  Code2,
   Cog,
   Compass,
+  DollarSign,
   FileText,
   FlaskConical,
+  Gamepad2,
+  GraduationCap,
+  Handshake,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   Loader2,
+  Map as MapIcon,
   Megaphone,
+  Package,
   Palette,
   PenLine,
   Presentation,
@@ -25,6 +35,7 @@ import {
   Target,
   TrendingUp,
   UserSearch,
+  Wand2,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -198,6 +209,18 @@ const ICONS: Record<string, LucideIcon> = {
   TrendingUp,
   Rocket,
   Compass,
+  // Added with the bulk agent-marketplace import (172 additional agents):
+  Code2,
+  Package,
+  Handshake,
+  LifeBuoy,
+  DollarSign,
+  GraduationCap,
+  Gamepad2,
+  Box,
+  Wand2,
+  BarChart3,
+  Map: MapIcon,
 };
 
 /** Semantic accent → Tailwind class string. The class strings are written
