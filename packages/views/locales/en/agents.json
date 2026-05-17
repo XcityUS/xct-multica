@@ -228,7 +228,7 @@
     "chooser": {
       "blank_title": "Start blank",
       "blank_desc": "Write everything yourself.",
-      "template_title": "From template",
+      "template_title": "From agent marketplace",
       "template_desc": "Pre-configured agents with curated skills."
     },
     "template_picker": {

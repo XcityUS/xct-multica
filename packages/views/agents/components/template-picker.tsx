@@ -2,8 +2,11 @@
 
 import { useMemo } from "react";
 import {
+  Brain,
   Brush,
   ChevronRight,
+  Cog,
+  Compass,
   FileText,
   FlaskConical,
   LayoutDashboard,
@@ -13,8 +16,16 @@ import {
   Palette,
   PenLine,
   Presentation,
+  Rocket,
   Search,
+  Server,
+  Shield,
+  ShieldCheck,
   Sparkles,
+  Target,
+  TrendingUp,
+  UserSearch,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -175,6 +186,18 @@ const ICONS: Record<string, LucideIcon> = {
   Megaphone,
   Presentation,
   LayoutDashboard,
+  // Added with the agent-marketplace import (msitarzewski/agency-agents):
+  Target,
+  ShieldCheck,
+  Zap,
+  Brain,
+  Server,
+  Cog,
+  Shield,
+  UserSearch,
+  TrendingUp,
+  Rocket,
+  Compass,
 };
 
 /** Semantic accent → Tailwind class string. The class strings are written

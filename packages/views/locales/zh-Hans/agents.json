@@ -223,7 +223,7 @@
     "chooser": {
       "blank_title": "从零开始",
       "blank_desc": "全部由你来填写。",
-      "template_title": "使用模板",
+      "template_title": "从代理市场",
       "template_desc": "预配置指令并精选 skill 的智能体。"
     },
     "template_picker": {

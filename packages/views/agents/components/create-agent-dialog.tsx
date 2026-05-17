@@ -63,7 +63,7 @@ type RuntimeFilter = "mine" | "all";
 
 // State machine encoded as a discriminated union.
 //
-//   chooser          → "Start blank" or "From template" cards
+//   chooser          → "Start blank" or "From agent marketplace" cards
 //   blank-form       → standard manual-create form (post-chooser)
 //   duplicate-form   → form pre-filled from a duplicated agent (entry only)
 //   template-picker  → grid of templates — clicking a card immediately
