@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Search, X } from "lucide-react";
 import { useAuthStore } from "@multica/core/auth";
 import { cn } from "@multica/ui/lib/utils";
 import { MARKETPLACE_AGENTS } from "../generated/agents";
@@ -9,13 +10,13 @@ import { useLocale } from "../i18n";
 import { GitHubMark, githubUrl, heroButtonClassName } from "./shared";
 
 /**
- * Agent Marketplace section — "explosive" word-cloud showcase of the 194
- * agent templates the backend ships. Each agent renders as a tag with a
- * size tier and opacity derived deterministically from a hash of its slug,
- * so the layout is stable across SSR and CSR (no hydration mismatch).
+ * Agent Marketplace section — "explosive" word-cloud showcase of the agent
+ * templates the backend ships, with live search + category filter.
  *
- * Design intent: convey BREADTH. The visual chaos of mixed sizes
- * communicates "look at how many" more directly than any prose can.
+ * Each agent renders as a tag with a size tier and opacity derived
+ * deterministically from a hash of its slug, so the layout is stable across
+ * SSR and CSR (no hydration mismatch) and matches between filtered and
+ * unfiltered views (filtering hides tags, never re-tiers them).
  *
  * Data source: apps/web/features/landing/generated/agents.ts, regenerated
  * from server/internal/agenttmpl/templates/*.json via
@@ -25,23 +26,54 @@ export function AgentMarketplaceSection() {
   const { t } = useLocale();
   const user = useAuthStore((s) => s.user);
 
-  // Deterministic shuffle + tier assignment so the cloud doesn't reshuffle
-  // across renders (preserves SSR/CSR consistency, avoids Tailwind JIT
-  // surprises from dynamic class names).
+  // Deterministic shuffle + tier assignment — computed once.
   const tags = useMemo(
     () =>
       MARKETPLACE_AGENTS.map((a) => {
         const h = hash(a.slug);
-        // Distribution: ~3% huge, ~10% large, ~22% medium, ~35% small, ~30% tiny.
-        const tier = h < 3 ? 0 : h < 13 ? 1 : h < 35 ? 2 : h < 70 ? 3 : 4;
-        // Use the accent on every ~7th tag so the cloud has subtle color
-        // splashes without becoming a rainbow. Otherwise default to a
-        // white-on-dark opacity ramp keyed to tier.
+        // Distribution targets more breathing room than the v1 mix:
+        //   ~2% huge → ~9% large → ~28% medium → ~38% small → ~23% tiny.
+        // Medium is now the dominant impression so the cloud reads at scan
+        // distance instead of disappearing into a fog of tiny tags.
+        const tier = h < 2 ? 0 : h < 11 ? 1 : h < 39 ? 2 : h < 77 ? 3 : 4;
         const useAccent = h % 7 === 0;
         return { agent: a, tier, useAccent, sortKey: h };
       }).sort((a, b) => a.sortKey - b.sortKey),
     [],
   );
+
+  // Category list + per-category counts for the chip row.
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of MARKETPLACE_AGENTS) {
+      counts.set(a.category, (counts.get(a.category) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, []);
+
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term && !filterCategory) return tags;
+    return tags.filter(({ agent }) => {
+      if (filterCategory && agent.category !== filterCategory) return false;
+      if (term && !agent.name.toLowerCase().includes(term)) return false;
+      return true;
+    });
+  }, [tags, search, filterCategory]);
+
+  const hasFilters = Boolean(search.trim() || filterCategory);
+  const clearAll = () => {
+    setSearch("");
+    setFilterCategory(null);
+  };
+  const showingText = t.marketplace.showing
+    .replace("{count}", String(filtered.length))
+    .replace("{total}", String(MARKETPLACE_AGENTS.length));
 
   return (
     <section
@@ -83,31 +115,104 @@ export function AgentMarketplaceSection() {
           </span>
         </div>
 
-        {/* Word cloud */}
-        <div className="relative mt-14 sm:mt-20">
-          <div
-            className="flex flex-wrap items-baseline justify-center gap-x-5 gap-y-3 leading-[0.95] sm:gap-x-7 sm:gap-y-5"
-            role="list"
-            aria-label={t.marketplace.label}
-          >
-            {tags.map(({ agent, tier, useAccent }) => (
-              <span
-                key={agent.slug}
-                role="listitem"
-                title={`${agent.name} · ${agent.category}`}
-                className={cn(
-                  "select-none whitespace-nowrap transition-all duration-200",
-                  TIER_CLASS[tier],
-                  useAccent
-                    ? ACCENT_CLASS[agent.accent] ?? ACCENT_CLASS.muted
-                    : OPACITY_CLASS[tier],
-                  "hover:text-white hover:[text-shadow:_0_0_18px_rgba(255,255,255,0.4)]",
-                )}
+        {/* --- Controls: search + category filter ----------------------- */}
+        <div className="mt-12 flex flex-col gap-4 sm:mt-16 sm:flex-row sm:items-center sm:justify-between">
+          {/* Search */}
+          <div className="relative flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-4 py-2.5 backdrop-blur-sm transition-colors focus-within:border-white/30 focus-within:bg-white/[0.06] sm:max-w-sm sm:flex-1">
+            <Search className="size-4 text-white/40" aria-hidden />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.marketplace.searchPlaceholder}
+              aria-label={t.marketplace.searchPlaceholder}
+              className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="rounded-full p-0.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {agent.name}
-              </span>
-            ))}
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
+
+          {/* Counter + clear */}
+          <div className="flex items-center gap-3 text-[12px] tabular-nums text-white/50 sm:text-right">
+            <span>{showingText}</span>
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-white/30 hover:bg-white/5 hover:text-white"
+              >
+                {t.marketplace.clearFilters}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Category chips. Horizontal scroll on mobile, wrap on desktop. */}
+        <div
+          className="mt-5 -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+          aria-label="Filter by category"
+        >
+          <CategoryChip
+            label={t.marketplace.allCategories}
+            count={MARKETPLACE_AGENTS.length}
+            active={filterCategory === null}
+            onClick={() => setFilterCategory(null)}
+          />
+          {categories.map((c) => (
+            <CategoryChip
+              key={c.name}
+              label={c.name}
+              count={c.count}
+              active={filterCategory === c.name}
+              onClick={() =>
+                setFilterCategory(filterCategory === c.name ? null : c.name)
+              }
+            />
+          ))}
+        </div>
+
+        {/* --- Word cloud ------------------------------------------------ */}
+        <div className="relative mt-12 sm:mt-16">
+          {filtered.length === 0 ? (
+            <p className="py-20 text-center text-[15px] text-white/40">
+              {t.marketplace.empty}
+            </p>
+          ) : (
+            <div
+              className="flex flex-wrap items-baseline justify-center gap-x-6 gap-y-4 leading-[0.95] sm:gap-x-10 sm:gap-y-7"
+              role="list"
+              aria-label={t.marketplace.label}
+            >
+              {filtered.map(({ agent, tier, useAccent }) => (
+                <button
+                  key={agent.slug}
+                  type="button"
+                  role="listitem"
+                  title={`${agent.name} · ${agent.category}`}
+                  onClick={() => setFilterCategory(agent.category)}
+                  className={cn(
+                    "select-none whitespace-nowrap transition-all duration-200",
+                    TIER_CLASS[tier],
+                    useAccent
+                      ? ACCENT_CLASS[agent.accent] ?? ACCENT_CLASS.muted
+                      : OPACITY_CLASS[tier],
+                    "hover:text-white hover:[text-shadow:_0_0_18px_rgba(255,255,255,0.4)]",
+                  )}
+                >
+                  {agent.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-16 flex flex-wrap items-center gap-4">
@@ -132,6 +237,40 @@ export function AgentMarketplaceSection() {
   );
 }
 
+interface CategoryChipProps {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}
+
+function CategoryChip({ label, count, active, onClick }: CategoryChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      role="tab"
+      aria-selected={active}
+      className={cn(
+        "group inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all",
+        active
+          ? "border-white/40 bg-white/15 text-white"
+          : "border-white/12 bg-white/[0.04] text-white/65 hover:border-white/25 hover:bg-white/[0.08] hover:text-white",
+      )}
+    >
+      <span>{label}</span>
+      <span
+        className={cn(
+          "tabular-nums text-[11px]",
+          active ? "text-white/70" : "text-white/35",
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 // Deterministic 0-99 hash so SSR + CSR agree without hydration warnings.
 function hash(s: string): number {
   let h = 2166136261;
@@ -144,21 +283,23 @@ function hash(s: string): number {
 
 /* --- Static class maps so Tailwind's JIT scanner picks up every variant. --- */
 
-// Size tiers. Mobile dampened (small screens can't host text-7xl bursts).
+// Size tiers. v2: top end capped at text-6xl (down from text-7xl) so the
+// cloud reads as a field rather than a billboard, and the medium tier is
+// the dominant impression after distribution tilted to it.
 const TIER_CLASS = [
-  "text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight",
-  "text-2xl sm:text-4xl md:text-5xl font-semibold tracking-tight",
-  "text-xl sm:text-3xl md:text-4xl font-medium tracking-tight",
-  "text-lg sm:text-2xl md:text-3xl font-normal tracking-tight",
-  "text-sm sm:text-lg md:text-xl font-light tracking-tight",
+  "text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight",
+  "text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight",
+  "text-xl sm:text-2xl md:text-3xl lg:text-4xl font-medium tracking-tight",
+  "text-lg sm:text-xl md:text-2xl font-normal tracking-tight",
+  "text-sm sm:text-base md:text-lg font-light tracking-tight",
 ];
 
 const OPACITY_CLASS = [
   "text-white/95",
   "text-white/85",
   "text-white/70",
-  "text-white/45",
-  "text-white/25",
+  "text-white/50",
+  "text-white/30",
 ];
 
 const ACCENT_CLASS: Record<string, string> = {

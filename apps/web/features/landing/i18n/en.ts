@@ -130,6 +130,11 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
     cta: "Open the marketplace",
     ctaSecondary: "Browse the source",
+    searchPlaceholder: "Search agents…",
+    allCategories: "All",
+    showing: "Showing {count} of {total}",
+    empty: "No agents match your filters.",
+    clearFilters: "Clear filters",
   },
 
   howItWorks: {

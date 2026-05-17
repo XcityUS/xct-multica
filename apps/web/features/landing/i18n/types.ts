@@ -50,6 +50,11 @@ export type LandingDict = {
     stats: { agents: string; categories: string; oneClick: string };
     cta: string;
     ctaSecondary: string;
+    searchPlaceholder: string;
+    allCategories: string;
+    showing: string;     // template with {count} and {total} placeholders
+    empty: string;
+    clearFilters: string;
   };
   howItWorks: {
     label: string;

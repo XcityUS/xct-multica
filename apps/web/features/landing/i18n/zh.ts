@@ -130,6 +130,11 @@ export function createZhDict(allowSignup: boolean): LandingDict {
     },
     cta: "进入代理市场",
     ctaSecondary: "查看源码",
+    searchPlaceholder: "搜索代理…",
+    allCategories: "全部",
+    showing: "显示 {count} / {total}",
+    empty: "没有代理匹配筛选条件。",
+    clearFilters: "清除筛选",
   },
 
   howItWorks: {
