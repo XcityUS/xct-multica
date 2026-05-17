@@ -5,7 +5,7 @@ import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { cn } from "@multica/ui/lib/utils";
 import { useAuthStore } from "@multica/core/auth";
 import { useLocale } from "../i18n";
-import { GitHubMark, githubUrl, headerButtonClassName } from "./shared";
+import { headerButtonClassName } from "./shared";
 
 export function LandingHeader({
   variant = "dark",
@@ -35,11 +35,11 @@ export function LandingHeader({
           />
           <span
             className={cn(
-              "text-[18px] font-semibold tracking-[0.04em] lowercase sm:text-[20px]",
+              "text-[18px] font-semibold tracking-[0.04em] sm:text-[20px]",
               variant === "dark" ? "text-white/92" : "text-[#0a0d12]",
             )}
           >
-            xct
+            XCT
           </span>
         </Link>
 
@@ -52,24 +52,6 @@ export function LandingHeader({
             )}
           >
             {t.header.marketplace}
-          </Link>
-          <Link
-            href="/changelog"
-            className={cn(
-              headerButtonClassName("ghost", variant),
-              "hidden sm:inline-flex",
-            )}
-          >
-            {t.header.changelog}
-          </Link>
-          <Link
-            href={githubUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={headerButtonClassName("ghost", variant)}
-          >
-            <GitHubMark className="size-3.5" />
-            {t.header.github}
           </Link>
           <Link
             href={user ? "/" : "/login"}
