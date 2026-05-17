@@ -314,7 +314,7 @@ export function createZhDict(allowSignup: boolean): LandingDict {
         title: "GitHub 集成、聊天附件与 Issue 定位优化",
         changes: [],
         features: [
-          "接入 GitHub 后，关联的 Pull Request 会显示在 Multica Issue 中，状态会同步到 Multica，关闭 PR 后会自动关闭对应 Issue",
+          "接入 GitHub 后，关联的 Pull Request 会显示在 XCT Issue 中，状态会同步到 XCT，关闭 PR 后会自动关闭对应 Issue",
           "聊天消息支持添加文件附件和图片预览",
           "Agent 和 runtime 可以设置公开或私有，方便控制团队可见范围",
           "停止单个 agent 任务前会先弹出确认，避免误操作",
@@ -325,7 +325,7 @@ export function createZhDict(allowSignup: boolean): LandingDict {
           "很长的 Issue 时间线滚动更顺畅",
           "反馈入口更明确地引导用户到 GitHub 参与讨论和反馈",
           "自托管 Caddy 配置文档补充实时连接要求",
-          "Linux 桌面端安装包恢复显示 Multica 应用图标",
+          "Linux 桌面端安装包恢复显示 XCT 应用图标",
         ],
         fixes: [
           "下载附件时保留原始文件名",
