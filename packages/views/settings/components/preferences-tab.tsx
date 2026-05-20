@@ -14,19 +14,20 @@ import { api } from "@multica/core/api";
 import { useT } from "../../i18n";
 
 const LIGHT_COLORS = {
-  titleBar: "#e8e8e8",
+  titleBar: "#e4e8ef",
   content: "#ffffff",
-  sidebar: "#f4f4f5",
-  bar: "#e4e4e7",
-  barMuted: "#d4d4d8",
+  sidebar: "#f0f4f8",
+  bar: "#dde3ec",
+  barMuted: "#c8d0dc",
 };
 
+// XCity MONOLITH: True Black × Electric Cyan (#00D4FF) × Gold (#C8A45A)
 const DARK_COLORS = {
-  titleBar: "#333338",
-  content: "#27272a",
-  sidebar: "#1e1e21",
-  bar: "#3f3f46",
-  barMuted: "#52525b",
+  titleBar: "#040408",
+  content: "#000000",
+  sidebar: "#070710",
+  bar: "#00D4FF26",
+  barMuted: "#151520",
 };
 
 function WindowMockup({
