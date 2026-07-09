@@ -178,15 +178,16 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
+  /* XCity MONOLITH: electric cyan (#00D4FF) → gold (#C8A45A) arc sweep */
   background: conic-gradient(
     from var(--border-beam-angle),
     transparent 0deg,
-    transparent 220deg,
-    #ffbe7b 245deg,
-    #ff777f 270deg,
-    #ff8ab4 295deg,
-    #a07cfe 320deg,
-    #5b9dff 345deg,
+    transparent 200deg,
+    #C8A45A 230deg,
+    #E8C47A 255deg,
+    #00D4FF 290deg,
+    #40DCFF 315deg,
+    #00D4FF 340deg,
     transparent 360deg
   );
   -webkit-mask:
@@ -201,14 +202,7 @@
 @media (prefers-reduced-motion: reduce) {
   .border-beam::before {
     animation: none;
-    background: linear-gradient(
-      90deg,
-      #ffbe7b,
-      #ff777f,
-      #ff8ab4,
-      #a07cfe,
-      #5b9dff
-    );
+    background: linear-gradient(90deg, #C8A45A, #00D4FF, #C8A45A);
   }
 }
 
