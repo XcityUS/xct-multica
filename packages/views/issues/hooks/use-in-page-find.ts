@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getShortcut, shortcutMatchesEvent } from "@multica/core/shortcuts";
+import { isImeComposing } from "@multica/core/utils";
 
-// ---------------------------------------------------------------------------
 // In-page find (Cmd/Ctrl+F) for the issue detail page.
 //
 // The comment timeline is virtualized, so native browser find only sees the
@@ -12,7 +13,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // CSS Custom Highlight API — ranges only, never DOM mutation, so it works
 // over React-rendered markdown AND the contenteditable title/description
 // editors without fighting ProseMirror.
-// ---------------------------------------------------------------------------
 
 const HIGHLIGHT_NAME = "multica-find";
 const ACTIVE_HIGHLIGHT_NAME = "multica-find-active";
@@ -271,8 +271,8 @@ export function useInPageFind(options: {
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
-      if (e.key !== "f" && e.key !== "F") return;
+      if (e.defaultPrevented || e.repeat || isImeComposing(e)) return;
+      if (!shortcutMatchesEvent(getShortcut("findInIssue"), e)) return;
       if (!isElementVisible(containerRef.current)) return;
       e.preventDefault();
       setOpen(true);

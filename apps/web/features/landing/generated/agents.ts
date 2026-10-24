@@ -1,4 +1,4 @@
-// AUTO-GENERATED from server/internal/agenttmpl/templates/*.json
+// AUTO-GENERATED from apps/web/features/landing/agent-templates/*.json
 // Regenerate via: scripts/gen-landing-agents.sh
 // Do not edit by hand.
 
@@ -41,20 +41,20 @@ export const MARKETPLACE_AGENTS: MarketplaceAgent[] = [
     "accent": "secondary"
   },
   {
+    "slug": "design-brand-guardian",
+    "name": "Brand Guardian",
+    "category": "Design",
+    "accent": "info"
+  },
+  {
     "slug": "frontend-builder",
     "name": "Frontend Builder",
-    "category": "Building",
+    "category": "Design",
     "accent": "secondary"
   },
   {
     "slug": "frontend-designer",
     "name": "Frontend Designer",
-    "category": "Building",
-    "accent": "info"
-  },
-  {
-    "slug": "design-brand-guardian",
-    "name": "Brand Guardian",
     "category": "Design",
     "accent": "info"
   },
@@ -209,12 +209,6 @@ export const MARKETPLACE_AGENTS: MarketplaceAgent[] = [
     "accent": "primary"
   },
   {
-    "slug": "full-stack-engineer",
-    "name": "Full-stack Engineer",
-    "category": "Engineering",
-    "accent": "primary"
-  },
-  {
     "slug": "engineering-git-workflow-master",
     "name": "Git Workflow Master",
     "category": "Engineering",
@@ -243,12 +237,6 @@ export const MARKETPLACE_AGENTS: MarketplaceAgent[] = [
     "name": "Performance Benchmarker",
     "category": "Engineering",
     "accent": "warning"
-  },
-  {
-    "slug": "planner",
-    "name": "Planner",
-    "category": "Engineering",
-    "accent": "info"
   },
   {
     "slug": "rapid-prototyper",
@@ -1155,24 +1143,6 @@ export const MARKETPLACE_AGENTS: MarketplaceAgent[] = [
     "name": "Support Responder",
     "category": "Support",
     "accent": "secondary"
-  },
-  {
-    "slug": "article-writer",
-    "name": "Article Writer",
-    "category": "Writing",
-    "accent": "success"
-  },
-  {
-    "slug": "docs-writer",
-    "name": "Docs Writer",
-    "category": "Writing",
-    "accent": "success"
-  },
-  {
-    "slug": "internal-comms",
-    "name": "Internal Comms",
-    "category": "Writing",
-    "accent": "warning"
   }
 ]
 ;

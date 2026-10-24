@@ -115,6 +115,20 @@ func smtpAuthWithFallback(c smtpAuthClient, host, username, password string) (bo
 	return true, plainErr
 }
 
+func resolveFromEmail(smtpHost string) string {
+	resendFrom := strings.TrimSpace(os.Getenv("RESEND_FROM_EMAIL"))
+	if smtpHost == "" {
+		if resendFrom != "" {
+			return resendFrom
+		}
+		return "noreply@xct.dev"
+	}
+	if smtpFrom := strings.TrimSpace(os.Getenv("SMTP_FROM_EMAIL")); smtpFrom != "" {
+		return smtpFrom
+	}
+	return resendFrom
+}
+
 func (s *EmailService) openSMTPClient() (*smtp.Client, error) {
 	addr := net.JoinHostPort(s.smtpHost, s.smtpPort)
 
@@ -166,11 +180,6 @@ func (s *EmailService) openSMTPClient() (*smtp.Client, error) {
 
 func NewEmailService() *EmailService {
 	apiKey := os.Getenv("RESEND_API_KEY")
-	from := strings.TrimSpace(os.Getenv("RESEND_FROM_EMAIL"))
-	if from == "" {
-		from = "noreply@xct.dev"
-	}
-
 	smtpHost := strings.TrimSpace(os.Getenv("SMTP_HOST"))
 	smtpPort := strings.TrimSpace(os.Getenv("SMTP_PORT"))
 	if smtpPort == "" {
@@ -179,6 +188,7 @@ func NewEmailService() *EmailService {
 	smtpUsername := os.Getenv("SMTP_USERNAME")
 	smtpPassword := os.Getenv("SMTP_PASSWORD")
 	smtpTLSInsecure := os.Getenv("SMTP_TLS_INSECURE") == "true"
+	from := resolveFromEmail(smtpHost)
 
 	// EHLO/HELO name, only relevant on the SMTP relay send path. net/smtp defaults
 	// to "localhost", which strict relays (e.g. smtp-relay.gmail.com) reject from a
@@ -249,6 +259,10 @@ func NewEmailService() *EmailService {
 // Upgrades to STARTTLS when advertised by the server.
 // Set SMTP_TLS_INSECURE=true for self-signed or private CA certificates.
 func (s *EmailService) sendSMTP(to, subject, htmlBody string) error {
+	if strings.TrimSpace(s.fromEmail) == "" {
+		return fmt.Errorf("SMTP_FROM_EMAIL or RESEND_FROM_EMAIL is required when SMTP_HOST is set")
+	}
+
 	c, err := s.openSMTPClient()
 	if err != nil {
 		return err
@@ -376,7 +390,6 @@ func (s *EmailService) SendVerificationCode(to, code string) error {
 </table>
 </body>
 </html>`, code, currentYear()),
-
 	}
 	_, err := s.client.Emails.Send(params)
 	return err
