@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
+import { SITE_TITLE } from "@/platform/document-title";
 import { MulticaLanding } from "@/features/landing/components/multica-landing";
 import { RedirectIfAuthenticated } from "@/features/landing/components/redirect-if-authenticated";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Multica — Project Management for Human + Agent Teams",
+    absolute: SITE_TITLE,
   },
   description:
-    "Source-available platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills.",
+    "XCT is an AI-native workspace where humans and agents collaborate. Assign tasks, track progress, compound skills.",
   openGraph: {
-    title: "Multica — Project Management for Human + Agent Teams",
+    title: SITE_TITLE,
     description:
       "Manage your human + agent workforce in one place.",
     url: "/",
