@@ -1,37 +1,23 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import {
-  ArrowLeft,
-  ChevronDown,
-  Cloud,
-  FileText,
-  Globe,
-  Loader2,
-  Lock,
-  PenLine,
-} from "lucide-react";
+import { useState } from "react";
+import { Globe, Lock, Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ProviderLogo } from "../../runtimes/components/provider-logo";
-import { ActorAvatar } from "../../common/actor-avatar";
 import { ModelDropdown } from "./model-dropdown";
-import { TemplatePicker } from "./template-picker";
-import { TemplateDetail } from "./template-detail";
+import { RuntimePicker } from "./runtime-picker";
+import { isRuntimeUsableForUser } from "@multica/core/runtimes";
 import { InstructionsEditor } from "./instructions-editor";
 import { SkillMultiSelect } from "./skill-multi-select";
-import { AvatarPicker } from "./avatar-picker";
-import { useNavigation } from "../../navigation";
+import { AvatarUploadControl } from "../../common/avatar-upload-control";
 import { api } from "@multica/core/api";
+import { useWorkspaceId } from "@multica/core/hooks";
 import { useFeatureEnabled } from "@multica/core/config";
 import { COMPOSIO_MCP_APPS_FLAG } from "@multica/core/feature-flags";
-import { useWorkspaceId } from "@multica/core/hooks";
-import { useWorkspacePaths } from "@multica/core/paths";
 import { workspaceKeys } from "@multica/core/workspace/queries";
 import type {
   Agent,
   AgentInvocationTargetInput,
   AgentPermissionMode,
-  AgentTemplateSummary,
   AgentVisibility,
   RuntimeDevice,
   MemberWithUser,
@@ -45,77 +31,20 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@multica/ui/components/ui/dialog";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@multica/ui/components/ui/popover";
 import { Button } from "@multica/ui/components/ui/button";
+import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
 import { Checkbox } from "@multica/ui/components/ui/checkbox";
 import { Input } from "@multica/ui/components/ui/input";
 import { Label } from "@multica/ui/components/ui/label";
-import { cn } from "@multica/ui/lib/utils";
 import { toast } from "sonner";
 import {
   AGENT_DESCRIPTION_MAX_LENGTH,
   VISIBILITY_DESCRIPTION,
   VISIBILITY_LABEL,
 } from "@multica/core/agents";
+import { ActorAvatar } from "../../common/actor-avatar";
 import { CharCounter } from "./char-counter";
 import { useT } from "../../i18n";
-
-type RuntimeFilter = "mine" | "all";
-
-// State machine encoded as a discriminated union.
-//
-//   chooser          → "Start blank" or "From agent marketplace" cards
-//   blank-form       → standard manual-create form (post-chooser)
-//   duplicate-form   → form pre-filled from a duplicated agent (entry only)
-//   template-picker  → grid of templates — clicking a card immediately
-//                      creates the agent (no intermediate form step);
-//                      the user refines on the detail page if needed.
-type DialogStep =
-  | { kind: "chooser" }
-  | { kind: "blank-form" }
-  | { kind: "duplicate-form" }
-  | { kind: "template-picker" }
-  | { kind: "template-detail"; template: AgentTemplateSummary };
-
-/** Helper: which step kinds render the form view. Template path is now
- *  a one-click flow (picker → API call → close), so it never lands on
- *  the form — defaults are auto-populated, the user customises later
- *  on the detail page. */
-function isFormStep(step: DialogStep): step is { kind: "blank-form" } | { kind: "duplicate-form" } {
-  return step.kind === "blank-form" || step.kind === "duplicate-form";
-}
-
-/**
- * Per-step dialog sizing.
- *
- * Width is wider on info-dense steps (picker, detail, form) — `max-w-5xl`
- * gives instructions and skill descriptions room to breathe without
- * wrapping every line. Chooser stays at `max-w-4xl`: only two cards, more
- * width just creates empty side-margin.
- *
- * Heights are **fixed pixel-ish values** because CSS `transition` cannot
- * interpolate to/from `height: auto` (the keyword isn't a number). Both
- * `h-[420px]` (chooser) and `h-[85vh]` (others) are numeric and animate
- * cleanly.
- *
- * `transition-[height,max-width]` runs whenever the step changes, giving
- * the modal a smooth grow/shrink instead of a hard size pop. !important
- * is required because the Dialog primitive sets its own `duration-100`.
- */
-function agentDialogContentClass(step: DialogStep): string {
-  return cn(
-    "p-0 gap-0 flex flex-col overflow-hidden",
-    "!top-1/2 !left-1/2 !-translate-x-1/2 !-translate-y-1/2",
-    "!w-full",
-    "!transition-[height,max-width] !duration-300 !ease-out",
-    step.kind === "chooser" ? "!max-w-4xl" : "!max-w-5xl",
-    step.kind === "chooser" ? "!h-[420px]" : "!h-[85vh]",
-  );
-}
 
 export function CreateAgentDialog({
   runtimes,
@@ -123,7 +52,6 @@ export function CreateAgentDialog({
   members,
   currentUserId,
   template,
-  existingAgentNames,
   squadId,
   onClose,
   onCreate,
@@ -140,15 +68,11 @@ export function CreateAgentDialog({
   // Skills are copied separately by the caller after createAgent
   // succeeds — they're not part of CreateAgentRequest.
   template?: Agent | null;
-  // Names of agents already in the workspace, used to auto-dedupe the
-  // default name when picking a template (so the form lands on a unique
-  // name instead of immediately hitting the backend's 409). Optional —
-  // when absent, default names are used verbatim and 409 stays the
-  // safety net.
-  existingAgentNames?: readonly string[];
-  // When set, every successful create is followed by addSquadMember so the
-  // new agent joins this squad. If the follow-up fails, the agent remains
-  // created and the user can add it manually from the squad Members tab.
+  // When set, every successful create is followed by
+  // addSquadMember(squadId, agent) so the new agent joins this squad.
+  // If the squad-join call fails the agent still exists and the dialog
+  // surfaces a warning toast — the user can add it manually from the
+  // Members tab.
   squadId?: string;
   onClose: () => void;
   // Returns the created Agent so the dialog can run a follow-up
@@ -161,25 +85,30 @@ export function CreateAgentDialog({
   const isDuplicate = !!template;
   const queryClient = useQueryClient();
   const wsId = useWorkspaceId();
-  const navigation = useNavigation();
-  const paths = useWorkspacePaths();
+  // MUL-4010: rolls out the private / public_to access model in the create
+  // flow to match the AccessPicker on the agent detail page. Shares the
+  // `composio_mcp_apps` switch with the Composio rollout — the MUL-3963
+  // permission model exists to gate Composio sharing, so both surfaces flip
+  // together. Defaults OFF so production stays on the legacy Workspace /
+  // Personal toggle until Composio is greenlit.
   const accessPickerEnabled = useFeatureEnabled(COMPOSIO_MCP_APPS_FLAG, false);
 
-  // Duplicate path comes in via the row action with a concrete agent —
-  // chooser would be redundant, jump straight to the form.
-  const [step, setStep] = useState<DialogStep>(
-    isDuplicate ? { kind: "duplicate-form" } : { kind: "chooser" },
-  );
-
-  // Name defaults: duplicate uses "<original> copy", template uses the
-  // template's name verbatim. Manual-create starts blank.
+  // Name defaults: duplicate uses "<original> copy". Manual-create starts blank.
   const [name, setName] = useState(
     template ? `${template.name}${t(($) => $.create_dialog.duplicate_copy_suffix)}` : "",
   );
   const [description, setDescription] = useState(template?.description ?? "");
+  // Legacy visibility state. Kept as the source of truth when
+  // `accessPickerEnabled` is false; only used to seed the new access state
+  // when the flag flips on for a duplicate.
   const [visibility, setVisibility] = useState<AgentVisibility>(
     template?.visibility ?? "workspace",
   );
+
+  // New access state (MUL-3963 aligned). When duplicating, seed from the
+  // template so the clone lands with the source agent's grants; otherwise
+  // default to public_to + workspace, matching the legacy "Workspace" default
+  // so a plain "click Create" produces the same result as before.
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>(
     template?.permission_mode ?? "public_to",
   );
@@ -199,6 +128,10 @@ export function CreateAgentDialog({
           .map((tgt) => tgt.target_id as string),
       ),
   );
+
+  // Team targets on the template are preserved across the create so we don't
+  // silently drop a grant type the picker doesn't expose yet (mirrors
+  // AccessPicker's `teamIds` pass-through).
   const templateTeamTargets: AgentInvocationTargetInput[] = (
     template?.invocation_targets ?? []
   )
@@ -207,90 +140,29 @@ export function CreateAgentDialog({
       target_type: "team" as const,
       target_id: tgt.target_id as string,
     }));
+
   const [model, setModel] = useState(template?.model ?? "");
-  // Optional fields exposed through the collapsible sections at the bottom
-  // of the form. Each initialises from the duplicate template (if any);
-  // template-flow defaults are populated when the user picks one (see
-  // goToTemplateForm). Selected skills are stored as IDs only — the
-  // workspace skill list is fetched on demand by SkillMultiSelect.
   const [instructions, setInstructions] = useState(template?.instructions ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(template?.avatar_url ?? null);
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(
     () => new Set(template?.skills.map((s) => s.id) ?? []),
   );
   const [creating, setCreating] = useState(false);
-  const [failedURLs, setFailedURLs] = useState<string[] | null>(null);
-  const [runtimeOpen, setRuntimeOpen] = useState(false);
-  const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("mine");
 
-  const getOwnerMember = (ownerId: string | null) => {
-    if (!ownerId) return null;
-    return members.find((m) => m.user_id === ownerId) ?? null;
-  };
-
-  const hasOtherRuntimes = runtimes.some((r) => r.owner_id !== currentUserId);
-
-  // A runtime is disabled for the caller when it's owned by someone else
-  // AND its visibility is not "public". Older backends that haven't shipped
-  // MUL-2062 leave visibility undefined; we treat anything other than the
-  // literal string "public" as private so the strict default holds (the
-  // backend will reject the create anyway).
-  const isRuntimeDisabledForUser = (r: RuntimeDevice): boolean => {
-    if (!currentUserId) return false;
-    if (r.owner_id === currentUserId) return false;
-    return r.visibility !== "public";
-  };
-
-  const filteredRuntimes = useMemo(() => {
-    const filtered = runtimeFilter === "mine" && currentUserId
-      ? runtimes.filter((r) => r.owner_id === currentUserId)
-      : runtimes;
-    return [...filtered].sort((a, b) => {
-      // Caller's own runtimes first; among the rest, usable (public) ones
-      // come before unusable (private) ones so the picker doesn't lead
-      // with greyed-out rows.
-      const aMine = a.owner_id === currentUserId;
-      const bMine = b.owner_id === currentUserId;
-      if (aMine && !bMine) return -1;
-      if (!aMine && bMine) return 1;
-      const aDisabled = isRuntimeDisabledForUser(a);
-      const bDisabled = isRuntimeDisabledForUser(b);
-      if (!aDisabled && bDisabled) return -1;
-      if (aDisabled && !bDisabled) return 1;
-      return 0;
-    });
-    // currentUserId is the only external dep of isRuntimeDisabledForUser;
-    // listing it in the deps array is enough.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runtimes, runtimeFilter, currentUserId]);
-
-  // When duplicating, default to the template's runtime so the clone
-  // lands on the same machine — caller can still switch in the picker.
-  // But never seed with a runtime the caller can't actually use (locked
-  // by visibility); otherwise the dialog opens with a selected row the
-  // user can't submit, and Create falls through to a backend 403. Falling
-  // back to the first usable runtime is friendlier than the locked
-  // pre-fill. Computed inside the initializer so the find-walk only runs
-  // on first mount, not on every render.
+  // Duplicate-mode pre-fill: clone lands on the source agent's runtime so
+  // the user doesn't have to re-pick. Skipped when that runtime is now
+  // locked for the caller (Create would 403). Empty fallback hands the
+  // job to RuntimePicker — it owns filter state, so it's the only place
+  // that knows which runtimes are visible right now.
   const [selectedRuntimeId, setSelectedRuntimeId] = useState(() => {
     const templateRuntime = template?.runtime_id
       ? runtimes.find((r) => r.id === template.runtime_id)
       : undefined;
-    if (templateRuntime && !isRuntimeDisabledForUser(templateRuntime)) {
+    if (templateRuntime && isRuntimeUsableForUser(templateRuntime, currentUserId)) {
       return templateRuntime.id;
     }
-    return filteredRuntimes.find((r) => !isRuntimeDisabledForUser(r))?.id ?? "";
+    return "";
   });
-
-  useEffect(() => {
-    if (!selectedRuntimeId) {
-      const firstUsable = filteredRuntimes.find(
-        (r) => !isRuntimeDisabledForUser(r),
-      );
-      if (firstUsable) setSelectedRuntimeId(firstUsable.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredRuntimes, selectedRuntimeId]);
 
   const selectedRuntime = runtimes.find((d) => d.id === selectedRuntimeId) ?? null;
   // Defense-in-depth: even if a locked runtime somehow ends up selected
@@ -298,8 +170,20 @@ export function CreateAgentDialog({
   // the workspace has no usable fallback), gate Create on it so we don't
   // submit a request the backend will reject with 403.
   const selectedRuntimeLocked =
-    selectedRuntime != null && isRuntimeDisabledForUser(selectedRuntime);
+    selectedRuntime != null &&
+    !isRuntimeUsableForUser(selectedRuntime, currentUserId);
+  const accessSelectionInvalid =
+    accessPickerEnabled &&
+    permissionMode === "public_to" &&
+    !workspaceTargetOn &&
+    selectedMemberIds.size === 0 &&
+    templateTeamTargets.length === 0;
 
+  // Shared squad-join follow-up. Returns nothing — the caller has
+  // already shown its create-success toast; we only need to surface a
+  // warning when the agent landed but the squad-join failed. Cache
+  // invalidation for the squad's members list rides along so the
+  // Members tab re-renders without a manual refetch.
   const attachToSquad = async (agentId: string, displayName: string) => {
     if (!squadId) return;
     try {
@@ -325,111 +209,19 @@ export function CreateAgentDialog({
     }
   };
 
-  // Transition helpers. Each centralises the form-field initialisation
-  // for its target step, so transitions can't leave stale state behind.
-
-  const goToBlankForm = () => {
-    setName("");
-    setDescription("");
-    setInstructions("");
-    setAvatarUrl(null);
-    setSelectedSkillIds(new Set());
-    setStep({ kind: "blank-form" });
-  };
-
-  // Template path is one-click — picker card click goes straight to the
-  // API. Defaults: name auto-deduped, runtime = first usable one,
-  // visibility = workspace. User refines on the detail page if needed.
-  // On 422 with failed_urls the user stays on the template-detail step
-  // and the banner there reports the bad URLs; on any other error we
-  // surface a toast and reset the spinner so they can retry.
-  const quickCreateFromTemplate = async (tmpl: AgentTemplateSummary) => {
-    if (!selectedRuntime || selectedRuntimeLocked) {
-      toast.error(t(($) => $.create_dialog.no_runtime_toast));
+  const handleSubmit = async () => {
+    if (
+      !name.trim() ||
+      !selectedRuntime ||
+      selectedRuntimeLocked ||
+      accessSelectionInvalid
+    ) {
       return;
     }
-    const taken = new Set(existingAgentNames ?? []);
-    let candidate = tmpl.name;
-    let n = 2;
-    while (taken.has(candidate)) {
-      candidate = `${tmpl.name} ${n}`;
-      n++;
-    }
-
-    setFailedURLs(null);
-    setCreating(true);
-    try {
-      const resp = await api.createAgentFromTemplate({
-        template_slug: tmpl.slug,
-        name: candidate,
-        runtime_id: selectedRuntime.id,
-        visibility: "workspace",
-      });
-      if (wsId) {
-        queryClient.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
-        queryClient.invalidateQueries({ queryKey: workspaceKeys.skills(wsId) });
-      }
-      if (resp.reused_skill_ids.length > 0) {
-        toast.success(
-          t(($) => $.create_dialog.template_created_with_reuse_toast, {
-            name: candidate,
-            count: resp.reused_skill_ids.length,
-          }),
-        );
-      } else {
-        toast.success(
-          t(($) => $.create_dialog.template_created_toast, { name: candidate }),
-        );
-      }
-      if (resp.agent.id && squadId) {
-        await attachToSquad(resp.agent.id, resp.agent.name || candidate);
-      }
-      onClose();
-      // Land on the new agent's detail page so the user can verify or
-      // customise instructions / skills / avatar — matches the navigation
-      // behaviour of the manual create path in agents-page.tsx. When the
-      // response failed schema parsing (`agent.id === ""`, see schema
-      // fallback) we skip the navigation: the agent was created server-
-      // side, the list-invalidation above will surface it, and a push
-      // to `/agents/` would land on a broken detail page.
-      if (resp.agent.id && !squadId) {
-        navigation.push(paths.agentDetail(resp.agent.id));
-      }
-    } catch (err) {
-      const body = extractFailureBody(err);
-      if (body?.failed_urls?.length) {
-        setFailedURLs(body.failed_urls);
-      } else {
-        toast.error(
-          err instanceof Error ? err.message : t(($) => $.create_dialog.create_failed_toast),
-        );
-      }
-      setCreating(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!name.trim() || !selectedRuntime || selectedRuntimeLocked) return;
-    setFailedURLs(null);
     setCreating(true);
 
-    // Template path goes through quickCreateFromTemplate directly from
-    // the picker — no form step. So handleSubmit only fires for blank /
-    // duplicate flows below.
-
-    // Scratch / duplicate path: hits the manual POST /api/agents through
-    // the caller's onCreate callback, then we run a follow-up
-    // setAgentSkills here for any skills the user selected in the form.
-    // Duplicate path already had this two-phase behaviour in
-    // agents-page.tsx; we extend it by sending whichever skill IDs the
-    // user explicitly chose in the dialog (overriding duplicate's
-    // copy-source skills if both apply).
     try {
       const trimmedInstructions = instructions.trim();
-      // Manual fields take precedence over duplicate source for
-      // instructions / avatar / skills — duplicate fills the defaults at
-      // mount time, then anything the user edits overrides those defaults
-      // naturally because we read from state.
       const data: CreateAgentRequest = {
         name: name.trim(),
         description: description.trim(),
@@ -437,18 +229,25 @@ export function CreateAgentDialog({
         model: model.trim() || undefined,
         instructions: trimmedInstructions || undefined,
         avatar_url: avatarUrl ?? undefined,
+        skill_ids: [...selectedSkillIds],
       };
       if (accessPickerEnabled) {
+        // New MUL-3963 shape: send the authoritative permission fields and
+        // let the backend derive the legacy `visibility` field. Mirror the
+        // AccessPicker `emit` normalisation — a public_to with zero targets
+        // collapses to private as defense in depth so the backend never sees
+        // an "empty public" request. Team targets from the template survive.
         const invocationTargets: AgentInvocationTargetInput[] = [];
         if (permissionMode === "public_to") {
           if (workspaceTargetOn) {
             invocationTargets.push({ target_type: "workspace" });
-          }
-          for (const id of selectedMemberIds) {
-            invocationTargets.push({ target_type: "member", target_id: id });
-          }
-          for (const tgt of templateTeamTargets) {
-            invocationTargets.push(tgt);
+          } else {
+            for (const id of selectedMemberIds) {
+              invocationTargets.push({ target_type: "member", target_id: id });
+            }
+            for (const tgt of templateTeamTargets) {
+              invocationTargets.push(tgt);
+            }
           }
         }
         const collapseToPrivate =
@@ -456,43 +255,31 @@ export function CreateAgentDialog({
         data.permission_mode = collapseToPrivate ? "private" : permissionMode;
         data.invocation_targets = collapseToPrivate ? [] : invocationTargets;
       } else {
+        // Legacy path: send the visibility toggle unchanged. The backend
+        // maps this to permission_mode + invocation_targets server-side.
         data.visibility = visibility;
       }
       if (template) {
         // Duplicate path: forward the hidden config fields the source
-        // agent had so the clone is functional out of the box (env / args
-        // / concurrency). Skills now flow through the dialog form, so we
-        // don't blindly carry template.skills here anymore — the form's
-        // selectedSkillIds is the source of truth.
+        // agent had so the clone is functional out of the box (args /
+        // concurrency). Skills flow through the dialog form. As of
+        // MUL-2600 the agent resource shape no longer carries
+        // custom_env values, so duplication cannot copy env at all —
+        // the user has to re-set env on the clone via the env tab
+        // (which now goes through the audited `/env` endpoint). The
+        // dialog's create call still accepts custom_env at create
+        // time, but the source values aren't available here.
         if (template.custom_args.length) data.custom_args = template.custom_args;
         if (template.max_concurrent_tasks) {
           data.max_concurrent_tasks = template.max_concurrent_tasks;
         }
       }
       const createdAgent = await onCreate(data);
-      // Follow-up: attach selected skills to the newly created agent.
-      // onCreate returns the created Agent for this path; if the caller
-      // doesn't return it we fall back to skipping (preserves
-      // backward compatibility with non-skill-aware callers).
-      if (createdAgent && selectedSkillIds.size > 0) {
-        try {
-          await api.setAgentSkills(createdAgent.id, {
-            skill_ids: [...selectedSkillIds],
-          });
-          if (wsId) {
-            queryClient.invalidateQueries({ queryKey: workspaceKeys.agents(wsId) });
-          }
-        } catch (skillErr) {
-          // Non-fatal: agent exists, skills can be added on the detail
-          // page. Surface as a warning toast so the user knows.
-          toast.warning(
-            t(($) => $.create_dialog.skill_attach_failed_toast, {
-              error:
-                skillErr instanceof Error ? skillErr.message : "unknown error",
-            }),
-          );
-        }
-      }
+      // Squad context: attach the agent after skills land so the
+      // squad's Members tab shows the agent with its skills already
+      // in place. Atomicity is best-effort by design (see plan in
+      // MUL-2178) — a partial failure surfaces a warning toast and
+      // the user can retry from the Add Member dialog.
       if (createdAgent && squadId) {
         await attachToSquad(createdAgent.id, createdAgent.name);
       }
@@ -503,446 +290,223 @@ export function CreateAgentDialog({
     }
   };
 
-  // Header title — narrowed by step.kind, so reads on `step.template` are
-  // type-safe and there's no fallback string compilation needed.
-  const headerTitle = (() => {
-    switch (step.kind) {
-      case "chooser":
-        return t(($) => $.create_dialog.title_create);
-      case "blank-form":
-        return t(($) => $.create_dialog.title_create);
-      case "duplicate-form":
-        return t(($) => $.create_dialog.title_duplicate);
-      case "template-picker":
-        return t(($) => $.create_dialog.template_picker.title);
-      case "template-detail":
-        return step.template.name;
-    }
-  })();
-
-  // Back navigation — each kind maps to one previous kind. Duplicate-form
-  // and chooser have no back (duplicate enters from a row action, chooser
-  // is the root).
-  const handleBack = () => {
-    switch (step.kind) {
-      case "template-picker":
-        setStep({ kind: "chooser" });
-        return;
-      case "template-detail":
-        setStep({ kind: "template-picker" });
-        return;
-      case "blank-form":
-        setStep({ kind: "chooser" });
-        return;
-      case "chooser":
-      case "duplicate-form":
-        return;
-    }
-  };
-
-  const showBackButton =
-    step.kind === "template-picker" ||
-    step.kind === "template-detail" ||
-    step.kind === "blank-form";
+  const headerTitle = isDuplicate
+    ? t(($) => $.create_dialog.title_duplicate)
+    : t(($) => $.create_dialog.title_create);
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className={agentDialogContentClass(step)}>
+      <DialogContent className="p-0 gap-0 flex flex-col overflow-hidden !top-1/2 !left-1/2 !-translate-x-1/2 !-translate-y-1/2 !w-full !max-w-2xl !h-[85vh]">
         <DialogHeader className="border-b px-5 py-3 space-y-0">
-          <div className="flex items-center gap-2">
-            {showBackButton && (
-              <button
-                type="button"
-                onClick={handleBack}
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label={t(($) => $.create_dialog.back_aria)}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-            )}
-            <DialogTitle className="text-base font-semibold">{headerTitle}</DialogTitle>
-          </div>
-          {step.kind === "chooser" && (
-            <DialogDescription className="mt-1 text-xs">
-              {t(($) => $.create_dialog.description_create)}
-            </DialogDescription>
-          )}
-          {step.kind === "duplicate-form" && template && (
-            <DialogDescription className="mt-1 text-xs">
+          <DialogTitle className="text-title-sm font-semibold">{headerTitle}</DialogTitle>
+          {isDuplicate && template && (
+            <DialogDescription className="mt-1 text-caption">
               {t(($) => $.create_dialog.description_duplicate, { name: template.name })}
             </DialogDescription>
           )}
         </DialogHeader>
 
-        {/* ---------- Step 1: Chooser (two large cards, vertically centred) ---------- */}
-        {step.kind === "chooser" && (
-          <div className="flex flex-1 items-center justify-center p-8">
-            <div className="grid w-full max-w-3xl grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={goToBlankForm}
-                className="group flex flex-col items-center justify-center gap-3 rounded-xl border bg-card p-8 text-center transition-colors hover:border-primary/40 hover:bg-accent/40"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-foreground">
-                  <PenLine className="h-7 w-7" />
-                </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="space-y-4 min-w-0">
+            {/* Identity row: avatar (left) + name & description stack
+                (right). The avatar visually anchors the identity of
+                what the user is creating; pairing it with the Name
+                field reads as "this is the agent's face + name",
+                same shape as detail-page header so the affordance is
+                instantly familiar. */}
+            <div className="flex items-start gap-4">
+              <AvatarUploadControl
+                variant="agent"
+                value={avatarUrl}
+                name={name}
+                size={64}
+                onUploaded={setAvatarUrl}
+                onEmojiSelected={setAvatarUrl}
+                onClear={() => setAvatarUrl(null)}
+              />
+              <div className="flex-1 min-w-0 space-y-3">
                 <div>
-                  <div className="text-base font-semibold">
-                    {t(($) => $.create_dialog.chooser.blank_title)}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {t(($) => $.create_dialog.chooser.blank_desc)}
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep({ kind: "template-picker" })}
-                className="group flex flex-col items-center justify-center gap-3 rounded-xl border bg-card p-8 text-center transition-colors hover:border-primary/40 hover:bg-accent/40"
-              >
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <FileText className="h-7 w-7" />
-                </div>
-                <div>
-                  <div className="text-base font-semibold">
-                    {t(($) => $.create_dialog.chooser.template_title)}
-                  </div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    {t(($) => $.create_dialog.chooser.template_desc)}
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ---------- Step 2: Template Picker — click a card opens the
-            detail preview so the user can review instructions / skills
-            before committing. ---------- */}
-        {step.kind === "template-picker" && (
-          <TemplatePicker
-            onSelect={(tmpl) => setStep({ kind: "template-detail", template: tmpl })}
-          />
-        )}
-
-        {/* ---------- Step 3: Template Detail — read-only preview with a
-            "Use this template" button. Clicking Use fires the one-shot
-            create with default settings (name auto-deduped, first usable
-            runtime, private visibility); the user customises further on
-            the agent detail page if needed. ---------- */}
-        {step.kind === "template-detail" && (
-          <TemplateDetail
-            template={step.template}
-            onUse={quickCreateFromTemplate}
-            creating={creating}
-            failedURLs={failedURLs}
-          />
-        )}
-
-        {/* ---------- Form step (blank / duplicate / template) ---------- */}
-        {isFormStep(step) && (
-          <>
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="space-y-4 min-w-0">
-                {/* failedURLs banner lives in TemplateDetail — it's the
-                    only step that can trigger a 422, and rendering the
-                    error there keeps the user where the action was. */}
-
-                {/* Identity row: avatar (left) + name & description stack
-                    (right). The avatar visually anchors the identity of
-                    what the user is creating; pairing it with the Name
-                    field reads as "this is the agent's face + name",
-                    same shape as detail-page header so the affordance is
-                    instantly familiar. */}
-                <div className="flex items-start gap-4">
-                  <AvatarPicker value={avatarUrl} onChange={setAvatarUrl} size={64} />
-                  <div className="flex-1 min-w-0 space-y-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.name_label)}</Label>
-                      <Input
-                        autoFocus
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder={t(($) => $.create_dialog.name_placeholder)}
-                        className="mt-1"
-                        onKeyDown={(e) => {
-                          if (isImeComposing(e)) return;
-                          if (e.key === "Enter") handleSubmit();
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.description_label)}</Label>
-                      <Input
-                        type="text"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder={t(($) => $.create_dialog.description_placeholder)}
-                        maxLength={AGENT_DESCRIPTION_MAX_LENGTH}
-                        className="mt-1"
-                      />
-                      <div className="mt-1">
-                        <CharCounter
-                          length={[...description].length}
-                          max={AGENT_DESCRIPTION_MAX_LENGTH}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {accessPickerEnabled ? (
-                  <AccessSection
-                    permissionMode={permissionMode}
-                    onPermissionModeChange={setPermissionMode}
-                    workspaceTargetOn={workspaceTargetOn}
-                    onWorkspaceTargetChange={setWorkspaceTargetOn}
-                    selectedMemberIds={selectedMemberIds}
-                    onSelectedMemberIdsChange={setSelectedMemberIds}
-                    members={members}
-                    currentUserId={currentUserId}
+                  <Label className="text-caption text-muted-foreground">{t(($) => $.create_dialog.name_label)}</Label>
+                  <Input
+                    autoFocus
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t(($) => $.create_dialog.name_placeholder)}
+                    className="mt-1"
+                    onKeyDown={(e) => {
+                      if (isImeComposing(e)) return;
+                      if (e.key === "Enter") handleSubmit();
+                    }}
                   />
-                ) : (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.visibility_label)}</Label>
-                    <div className="mt-1.5 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setVisibility("workspace")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-                          visibility === "workspace"
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:bg-muted"
-                        }`}
-                      >
-                        <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="text-left">
-                          <div className="font-medium">{VISIBILITY_LABEL.workspace}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {VISIBILITY_DESCRIPTION.workspace}
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setVisibility("private")}
-                        className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-                          visibility === "private"
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:bg-muted"
-                        }`}
-                      >
-                        <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="text-left">
-                          <div className="font-medium">{VISIBILITY_LABEL.private}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {VISIBILITY_DESCRIPTION.private}
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.runtime_label)}</Label>
-                    {hasOtherRuntimes && (
-                      <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => { setRuntimeFilter("mine"); setSelectedRuntimeId(""); }}
-                          className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                            runtimeFilter === "mine"
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {t(($) => $.create_dialog.runtime_filter_mine)}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setRuntimeFilter("all"); setSelectedRuntimeId(""); }}
-                          className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                            runtimeFilter === "all"
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {t(($) => $.create_dialog.runtime_filter_all)}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <Popover open={runtimeOpen} onOpenChange={setRuntimeOpen}>
-                    <PopoverTrigger
-                      disabled={runtimes.length === 0 && !runtimesLoading}
-                      className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5 mt-1.5 text-left text-sm transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-                    >
-                      {runtimesLoading ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-                      ) : selectedRuntime ? (
-                        <ProviderLogo provider={selectedRuntime.provider} className="h-4 w-4 shrink-0" />
-                      ) : (
-                        <Cloud className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-medium">
-                            {runtimesLoading ? t(($) => $.create_dialog.runtime_loading) : (selectedRuntime?.name ?? t(($) => $.create_dialog.runtime_none))}
-                          </span>
-                          {selectedRuntime?.runtime_mode === "cloud" && (
-                            <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                              {t(($) => $.create_dialog.runtime_cloud_badge)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {selectedRuntime
-                            ? (getOwnerMember(selectedRuntime.owner_id)?.name ?? selectedRuntime.device_info)
-                            : t(($) => $.create_dialog.runtime_register_first)}
-                        </div>
-                      </div>
-                      <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${runtimeOpen ? "rotate-180" : ""}`} />
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-[var(--anchor-width)] p-1 max-h-60 overflow-y-auto">
-                      {filteredRuntimes.map((device) => {
-                        const ownerMember = getOwnerMember(device.owner_id);
-                        const disabled = isRuntimeDisabledForUser(device);
-                        const disabledTitle = disabled
-                          ? t(($) => $.create_dialog.runtime_private_locked_tooltip)
-                          : undefined;
-                        return (
-                          <button
-                            key={device.id}
-                            type="button"
-                            disabled={disabled}
-                            title={disabledTitle}
-                            onClick={() => {
-                              if (disabled) return;
-                              setSelectedRuntimeId(device.id);
-                              setRuntimeOpen(false);
-                            }}
-                            className={`flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-                              disabled
-                                ? "cursor-not-allowed opacity-50"
-                                : device.id === selectedRuntimeId
-                                  ? "bg-accent"
-                                  : "hover:bg-accent/50"
-                            }`}
-                          >
-                            <ProviderLogo provider={device.provider} className="h-4 w-4 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate font-medium">{device.name}</span>
-                                {device.runtime_mode === "cloud" && (
-                                  <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                                    {t(($) => $.create_dialog.runtime_cloud_badge)}
-                                  </span>
-                                )}
-                                {disabled && (
-                                  <span className="shrink-0 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                    <Lock className="h-3 w-3" />
-                                    {t(($) => $.create_dialog.runtime_private_badge)}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                                {ownerMember ? (
-                                  <>
-                                    <ActorAvatar actorType="member" actorId={ownerMember.user_id} size={14} />
-                                    <span className="truncate">{ownerMember.name}</span>
-                                  </>
-                                ) : (
-                                  <span className="truncate">{device.device_info}</span>
-                                )}
-                              </div>
-                            </div>
-                            <span
-                              className={`h-2 w-2 shrink-0 rounded-full ${
-                                device.status === "online" ? "bg-success" : "bg-muted-foreground/40"
-                              }`}
-                            />
-                          </button>
-                        );
-                      })}
-                    </PopoverContent>
-                  </Popover>
                 </div>
 
-                <ModelDropdown
-                  runtimeId={selectedRuntime?.id ?? null}
-                  runtimeOnline={selectedRuntime?.status === "online"}
-                  value={model}
-                  onChange={setModel}
-                  disabled={!selectedRuntime}
-                />
-
-                {/* --- Optional sections (instructions / skills) ---
-                    Collapsed by default so quick-create stays fast.
-                    Duplicate pre-fills everything from the source agent. */}
-                <InstructionsEditor
-                  value={instructions}
-                  onChange={setInstructions}
-                  placeholder={
-                    step.kind === "duplicate-form"
-                      ? t(($) => $.create_dialog.instructions.placeholder_duplicate)
-                      : t(($) => $.create_dialog.instructions.placeholder_blank)
-                  }
-                />
-
-                <SkillMultiSelect
-                  selectedIds={selectedSkillIds}
-                  onChange={setSelectedSkillIds}
-                  // We deliberately don't filter by `template.skills` here:
-                  // the template's skill IDs live in skills.sh / GitHub
-                  // space (source_url), while the picker shows workspace
-                  // skill UUIDs — they're incomparable. If the user does
-                  // tick a workspace skill that happens to match a
-                  // template skill by name, the server's AddAgentSkill
-                  // uses ON CONFLICT DO NOTHING so the duplicate is a
-                  // silent no-op.
-                />
-
-                {/* Avatar moved up next to Name — see the identity row at
-                    the top of the form. */}
+                <div>
+                  <Label className="text-caption text-muted-foreground">{t(($) => $.create_dialog.description_label)}</Label>
+                  <Input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={t(($) => $.create_dialog.description_placeholder)}
+                    maxLength={AGENT_DESCRIPTION_MAX_LENGTH}
+                    className="mt-1"
+                  />
+                  <div className="mt-1">
+                    <CharCounter
+                      length={[...description].length}
+                      max={AGENT_DESCRIPTION_MAX_LENGTH}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Inline footer instead of <DialogFooter>: the shipped
-                DialogFooter applies `-mx-4 -mb-4` assuming a padded
-                DialogContent (default `p-4`). Our DialogContent uses
-                `p-0`, so those negative margins push the footer outside
-                the dialog. A plain flex row anchored by `border-t` keeps
-                the visual rhythm without the overflow bug. */}
-            <div className="flex items-center justify-end gap-2 border-t bg-background px-5 py-3">
-              <Button variant="ghost" onClick={onClose}>
-                {t(($) => $.create_dialog.cancel)}
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={
-                  creating || !name.trim() || !selectedRuntime || selectedRuntimeLocked
-                }
-                title={
-                  selectedRuntimeLocked
-                    ? t(($) => $.create_dialog.runtime_private_locked_tooltip)
-                    : undefined
-                }
-              >
-                {creating ? t(($) => $.create_dialog.creating) : t(($) => $.create_dialog.create)}
-              </Button>
-            </div>
-          </>
-        )}
+            {accessPickerEnabled ? (
+              <AccessSection
+                permissionMode={permissionMode}
+                onPermissionModeChange={setPermissionMode}
+                workspaceTargetOn={workspaceTargetOn}
+                onWorkspaceTargetChange={setWorkspaceTargetOn}
+                selectedMemberIds={selectedMemberIds}
+                onSelectedMemberIdsChange={setSelectedMemberIds}
+                members={members}
+                currentUserId={currentUserId}
+              />
+            ) : (
+              <div>
+                <Label className="text-caption text-muted-foreground">{t(($) => $.create_dialog.visibility_label)}</Label>
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("workspace")}
+                    className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-body transition-colors ${
+                      visibility === "workspace"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="text-left">
+                      <div className="font-medium">{VISIBILITY_LABEL.workspace}</div>
+                      <div className="text-caption text-muted-foreground">
+                        {VISIBILITY_DESCRIPTION.workspace}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibility("private")}
+                    className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-body transition-colors ${
+                      visibility === "private"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="text-left">
+                      <div className="font-medium">{VISIBILITY_LABEL.private}</div>
+                      <div className="text-caption text-muted-foreground">
+                        {VISIBILITY_DESCRIPTION.private}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <RuntimePicker
+              runtimes={runtimes}
+              runtimesLoading={runtimesLoading}
+              members={members}
+              currentUserId={currentUserId}
+              selectedRuntimeId={selectedRuntimeId}
+              onSelect={(id) => {
+                // Models are per-runtime; a value picked for the old runtime
+                // may not exist on the new one, so drop it on runtime change.
+                if (id !== selectedRuntimeId) setModel("");
+                setSelectedRuntimeId(id);
+              }}
+            />
+
+            <ModelDropdown
+              runtimeId={selectedRuntime?.id ?? null}
+              runtimeOnline={selectedRuntime?.status === "online"}
+              value={model}
+              onChange={setModel}
+              disabled={!selectedRuntime}
+            />
+
+            {/* --- Optional sections (instructions / skills) ---
+                Collapsed by default so quick-create stays fast.
+                Duplicate pre-fills everything from the source agent. */}
+            <InstructionsEditor
+              value={instructions}
+              onChange={setInstructions}
+              placeholder={
+                isDuplicate
+                  ? t(($) => $.create_dialog.instructions.placeholder_duplicate)
+                  : t(($) => $.create_dialog.instructions.placeholder_blank)
+              }
+            />
+
+            <SkillMultiSelect
+              selectedIds={selectedSkillIds}
+              onChange={setSelectedSkillIds}
+            />
+          </div>
+        </div>
+
+        {/* Inline footer instead of <DialogFooter>: the shipped
+            DialogFooter applies `-mx-4 -mb-4` assuming a padded
+            DialogContent (default `p-4`). Our DialogContent uses
+            `p-0`, so those negative margins push the footer outside
+            the dialog. A plain flex row anchored by `border-t` keeps
+            the visual rhythm without the overflow bug. */}
+        <div className="flex items-center justify-end gap-2 border-t bg-background px-5 py-3">
+          <Button variant="ghost" onClick={onClose}>
+            {t(($) => $.create_dialog.cancel)}
+          </Button>
+          <TooltipHint
+            label={
+              selectedRuntimeLocked
+                ? t(($) => $.create_dialog.runtime_private_locked_tooltip)
+                : undefined
+            }
+          >
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                creating || !name.trim() || !selectedRuntime || selectedRuntimeLocked
+              }
+              // Keeps the button hoverable so its tooltip can say why it is blocked.
+              focusableWhenDisabled={selectedRuntimeLocked}
+              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+            >
+              {creating ? t(($) => $.create_dialog.creating) : t(($) => $.create_dialog.create)}
+            </Button>
+          </TooltipHint>
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+
+/**
+ * AccessSection — inline access editor for the create/duplicate flow, gated
+ * on `COMPOSIO_MCP_APPS_FLAG`. Mirrors the semantics of
+ * `AccessPicker` on the agent detail page: the underlying model is
+ * `permission_mode` + `invocation_targets` (MUL-3963), not the legacy
+ * `visibility`.
+ *
+ * The three mutually exclusive scopes mirror AccessPicker on the detail page.
+ * Specific people reveals a member allow-list; an entire-workspace grant never
+ * stacks redundant member targets underneath it.
+ *
+ * The current viewer is intentionally excluded from the member list: an
+ * owner is always allowed to invoke their own agent, so listing them again
+ * would be misleading.
+ */
 function AccessSection({
   permissionMode,
   onPermissionModeChange,
@@ -964,8 +528,10 @@ function AccessSection({
 }) {
   const { t } = useT("agents");
   const isPrivate = permissionMode === "private";
+  const isWorkspace = !isPrivate && workspaceTargetOn;
+  const isMembers = !isPrivate && !workspaceTargetOn;
+
   const otherMembers = members.filter((m) => m.user_id !== currentUserId);
-  const hasAnyGrant = workspaceTargetOn || selectedMemberIds.size > 0;
 
   const toggleMember = (userId: string, checked: boolean) => {
     const next = new Set(selectedMemberIds);
@@ -976,70 +542,48 @@ function AccessSection({
 
   return (
     <div>
-      <Label className="text-xs text-muted-foreground">
+      <Label className="text-caption text-muted-foreground">
         {t(($) => $.create_dialog.access.label)}
       </Label>
-      <div className="mt-1.5 flex gap-2">
-        <button
-          type="button"
-          onClick={() => onPermissionModeChange("private")}
-          className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-            isPrivate
-              ? "border-primary bg-primary/5"
-              : "border-border hover:bg-muted"
-          }`}
-        >
-          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="text-left">
-            <div className="font-medium">
-              {t(($) => $.create_dialog.access.private_title)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {t(($) => $.create_dialog.access.private_desc)}
-            </div>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onPermissionModeChange("public_to")}
-          className={`flex flex-1 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
-            !isPrivate
-              ? "border-primary bg-primary/5"
-              : "border-border hover:bg-muted"
-          }`}
-        >
-          <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="text-left">
-            <div className="font-medium">
-              {t(($) => $.create_dialog.access.public_title)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {t(($) => $.create_dialog.access.public_desc)}
-            </div>
-          </div>
-        </button>
-      </div>
+      <fieldset className="mt-1.5 grid gap-2 sm:grid-cols-3">
+        <legend className="sr-only">{t(($) => $.access.tooltip)}</legend>
+        <CompactAccessChoice
+          value="private"
+          icon={Lock}
+          title={t(($) => $.access.private_title)}
+          description={t(($) => $.access.private_desc)}
+          selected={isPrivate}
+          onSelect={() => onPermissionModeChange("private")}
+        />
+        <CompactAccessChoice
+          value="workspace"
+          icon={Globe}
+          title={t(($) => $.access.workspace_title)}
+          description={t(($) => $.access.workspace_desc)}
+          selected={isWorkspace}
+          onSelect={() => {
+            onPermissionModeChange("public_to");
+            onWorkspaceTargetChange(true);
+          }}
+        />
+        <CompactAccessChoice
+          value="members"
+          icon={Users}
+          title={t(($) => $.access.members_title)}
+          description={t(($) => $.access.members_desc)}
+          selected={isMembers}
+          onSelect={() => {
+            onPermissionModeChange("public_to");
+            onWorkspaceTargetChange(false);
+          }}
+        />
+      </fieldset>
 
-      {!isPrivate && (
+      {isMembers && (
         <div className="mt-2 rounded-lg border bg-muted/30 px-3 py-2">
-          <label className="flex cursor-pointer items-center gap-2 rounded-md py-1 text-sm">
-            <Checkbox
-              checked={workspaceTargetOn}
-              onCheckedChange={(v) => onWorkspaceTargetChange(v === true)}
-              aria-label={t(($) => $.create_dialog.access.public_workspace_option)}
-            />
-            <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">
-              {t(($) => $.create_dialog.access.public_workspace_option)}
-            </span>
-          </label>
-
-          <div className="mt-2 border-t pt-2">
-            <div className="pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {t(($) => $.create_dialog.access.public_members_group)}
-            </div>
+          <div>
             {otherMembers.length === 0 ? (
-              <div className="py-1 text-xs text-muted-foreground">
+              <div className="py-1 text-caption text-muted-foreground">
                 {t(($) => $.create_dialog.access.public_members_empty)}
               </div>
             ) : (
@@ -1049,7 +593,7 @@ function AccessSection({
                   return (
                     <label
                       key={m.user_id}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-background/60"
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-body hover:bg-background/60"
                     >
                       <Checkbox
                         checked={checked}
@@ -1061,7 +605,7 @@ function AccessSection({
                       <ActorAvatar
                         actorType="member"
                         actorId={m.user_id}
-                        size={18}
+                        size="sm"
                       />
                       <span className="min-w-0 flex-1 truncate">{m.name}</span>
                     </label>
@@ -1071,9 +615,9 @@ function AccessSection({
             )}
           </div>
 
-          {!hasAnyGrant && (
-            <div className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-              {t(($) => $.create_dialog.access.public_targets_empty_hint)}
+          {selectedMemberIds.size === 0 && (
+            <div className="mt-2 text-caption text-destructive" role="alert">
+              {t(($) => $.access.shared_target_required)}
             </div>
           )}
         </div>
@@ -1082,25 +626,45 @@ function AccessSection({
   );
 }
 
-// extractFailureBody recovers the structured 422 payload from the fetch
-// error our APIClient throws. The client wraps non-2xx responses as a thrown
-// Error whose message is the JSON body; this helper parses it so we can
-// surface specific failed URLs instead of just "request failed".
-function extractFailureBody(err: unknown): { error?: string; failed_urls?: string[] } | null {
-  if (!(err instanceof Error)) return null;
-  // The fetch helper attaches the body as a stringified JSON on the error
-  // message (or as `body` on the error object). Try both shapes.
-  const maybeBody = (err as Error & { body?: unknown }).body;
-  if (maybeBody && typeof maybeBody === "object") {
-    return maybeBody as { error?: string; failed_urls?: string[] };
-  }
-  try {
-    const parsed = JSON.parse(err.message);
-    if (parsed && typeof parsed === "object") {
-      return parsed as { error?: string; failed_urls?: string[] };
-    }
-  } catch {
-    // not JSON — fall through
-  }
-  return null;
+function CompactAccessChoice({
+  value,
+  icon: Icon,
+  title,
+  description,
+  selected,
+  onSelect,
+}: {
+  value: string;
+  icon: typeof Lock;
+  title: string;
+  description: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      className={`flex min-w-0 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-body transition-colors hover:bg-muted ${
+        selected ? "border-primary bg-primary/5" : "border-border"
+      }`}
+    >
+      <input
+        type="radio"
+        name="create-agent-access-scope"
+        value={value}
+        checked={selected}
+        onChange={onSelect}
+        className="mt-0.5 size-4 shrink-0 accent-foreground"
+      />
+      <Icon
+        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="min-w-0">
+        <span className="block font-medium">{title}</span>
+        <span className="mt-0.5 block text-caption leading-4 text-muted-foreground">
+          {description}
+        </span>
+      </span>
+    </label>
+  );
 }

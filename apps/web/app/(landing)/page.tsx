@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { XCTLanding } from "@/features/landing/components/multica-landing";
+import { MulticaLanding } from "@/features/landing/components/multica-landing";
 import { RedirectIfAuthenticated } from "@/features/landing/components/redirect-if-authenticated";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "XCT — AI Native Workspace for Human + Agent Teams",
+    absolute: "Multica — Project Management for Human + Agent Teams",
   },
   description:
-    "AI Native workspace where humans and agents collaborate. Assign tasks, track progress, compound skills.",
+    "Source-available platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills.",
   openGraph: {
-    title: "XCT — AI Native Workspace for Human + Agent Teams",
+    title: "Multica — Project Management for Human + Agent Teams",
     description:
-      "Manage your workforce in one place.",
+      "Manage your human + agent workforce in one place.",
     url: "/",
   },
   alternates: {
@@ -23,7 +23,7 @@ export default function LandingPage() {
   return (
     <>
       <RedirectIfAuthenticated />
-      <XCTLanding />
+      <MulticaLanding />
     </>
   );
 }

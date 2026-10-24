@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Regenerate apps/web/features/landing/data/agents.ts from the agent template
-# JSON files. Run this whenever templates are added/removed/renamed.
+# Regenerate apps/web/features/landing/generated/agents.ts from the agent template
+# JSON files (the landing Agent Marketplace catalog). Run this whenever
+# templates are added/removed/renamed.
 #
 # Usage: bash scripts/gen-landing-agents.sh
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SRC="$ROOT/server/internal/agenttmpl/templates"
+SRC="$ROOT/apps/web/features/landing/agent-templates"
 DST="$ROOT/apps/web/features/landing/generated/agents.ts"
 
 mkdir -p "$(dirname "$DST")"
 
 {
-  echo "// AUTO-GENERATED from server/internal/agenttmpl/templates/*.json"
+  echo "// AUTO-GENERATED from apps/web/features/landing/agent-templates/*.json"
   echo "// Regenerate via: scripts/gen-landing-agents.sh"
   echo "// Do not edit by hand."
   echo ""
