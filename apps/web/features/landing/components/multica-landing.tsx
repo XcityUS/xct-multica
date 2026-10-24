@@ -9,7 +9,7 @@ import { OpenSourceSection } from "./open-source-section";
 import { FAQSection } from "./faq-section";
 import { LandingFooter } from "./landing-footer";
 
-export function XCTLanding() {
+export function MulticaLanding() {
   return (
     <>
       <div className="relative">
